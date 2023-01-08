@@ -20,9 +20,30 @@ const client = new MongoClient(uri, {
   useUnifiedTopology: true,
   serverApi: ServerApiVersion.v1,
 });
+
+// Verify json web token
+const verifyJwt = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "Unauthorized access" });
+  }
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "Unauthorized access" });
+  }
+  jwt.verify(token, process.env.JWT_TOKEN, function (err, decoded) {
+    if (err) {
+      return res.status(403).send({ message: "Forbidden access" });
+    }
+    req.decoded = decoded;
+  });
+  next();
+};
+
 async function run() {
   try {
     const postCollection = client.db("sedide").collection("posts");
+    const userCollection = client.db("sedide").collection("users");
 
     app.post("/post", async (req, res) => {
       const post = req.body;
@@ -58,6 +79,29 @@ async function run() {
       const filter = { _id: ObjectId(id) };
       const result = await postCollection.deleteOne(filter);
       res.send(result);
+    });
+
+    app.post("/userdata", async (req, res) => {
+      const email = req.query.email;
+      const user = req.body;
+      const filter = { email: email };
+      const isExist = await userCollection.findOne(filter);
+      if (isExist) {
+        return;
+      }
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
+
+    app.get("/jwt", async (req, res) => {
+      const email = req.query.email;
+      const filter = { email: email };
+      const user = await userCollection.findOne(filter);
+      if (!user) {
+        return res.status(401).send({ message: "Unauthorized access" });
+      }
+      const token = jwt.sign(user, process.env.JWT_TOKEN, { expiresIn: "10d" });
+      res.send({ token });
     });
   } finally {
   }
