@@ -1,4 +1,5 @@
 require("dotenv").config();
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -13,7 +14,6 @@ app.get("/", (req, res) => {
   res.send("Sedide is here!");
 });
 
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.5a1umhj.mongodb.net/?retryWrites=true&w=majority`;
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
@@ -50,18 +50,22 @@ async function run() {
       const result = await postCollection.insertOne(post);
       res.send(result);
     });
+
     app.get("/post", async (req, res) => {
-      const result = await postCollection.find({}).toArray();
+      const result = await postCollection
+        .find({}, { sort: { time: -1 } })
+        .toArray();
       res.send(result);
     });
-    app.get("/myposts", async (req, res) => {
+
+    app.get("/myposts", verifyJwt, async (req, res) => {
       const email = req.query.email;
       const filter = { authorEmail: email };
       const result = await postCollection.find(filter).toArray();
       res.send(result);
     });
 
-    app.patch("/updatepost/:id", async (req, res) => {
+    app.patch("/updatepost/:id", verifyJwt, async (req, res) => {
       const id = req.params.id;
       const newDescription = req.body.newDescription;
       const filter = { _id: ObjectId(id) };
@@ -74,7 +78,7 @@ async function run() {
       res.send(result);
     });
 
-    app.delete("/deletepost/:id", async (req, res) => {
+    app.delete("/deletepost/:id", verifyJwt, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: ObjectId(id) };
       const result = await postCollection.deleteOne(filter);
@@ -84,8 +88,8 @@ async function run() {
     app.post("/userdata", async (req, res) => {
       const email = req.query.email;
       const user = req.body;
-      const filter = { email: email };
-      const isExist = await userCollection.findOne(filter);
+      const query = { email: email };
+      const isExist = await userCollection.findOne(query);
       if (isExist) {
         return;
       }
